@@ -18,7 +18,7 @@ phases:
   build:
     commands:
       - echo Building for ${ENV}...
-      - npm run start
+      # - npm run start
       - aws configure set aws_access_key_id ${PROD_AWS_ACCOUNT_ACCESS_KEY} --profile aws-prod
       - aws configure set aws_secret_access_key ${PROD_AWS_ACCOUNT_SECRET_KEY} --profile aws-prod
       - aws configure set default.region ca-central-1 --profile aws-prod
@@ -33,9 +33,11 @@ phases:
       - |
         if [ ${ENV} = "uat" ] || [ ${ENV} = "production" ]; then
           echo Copying artifacts with profile aws-prod
+          aws s3 api create-bucket --bucket ${ARTIFACT_S3_BUCKET} --region ca-central-1
           aws s3 sync target/${ENV} "s3://${ARTIFACT_S3_BUCKET}" --cache-control "max-age=1"  --profile aws-prod
         else
           echo Copying artifacts with profile default
+          aws s3 api create-bucket --bucket ${ARTIFACT_S3_BUCKET} --region ca-central-1
           aws s3 sync target/${ENV} "s3://${ARTIFACT_S3_BUCKET}" --cache-control "max-age=1" 
         fi
       - echo Copied artifacts to S3 at `date`
