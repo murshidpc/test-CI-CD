@@ -1,0 +1,1035 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation Template for CI/CD pipeline of oneBayshore user service.",
+    "Parameters": {
+      "ApplicationName": {
+        "Description": "This will be used to name the pipeline and build resources",
+        "Type": "String",
+        "AllowedPattern": "[A-Za-z0-9-]+",
+        "Default": "test-ui-ud"
+      },
+      "GitHubRepository": {
+        "Description": "Enter the repository name that should be monitored for changes",
+        "Type": "String",
+        "Default": "test-UI-UD"
+      },
+      "GitHubRepositoryOwner": {
+        "Description": "Enter GitHub username of the repository owner",
+        "Type": "String",
+        "Default" : "murshidpc"
+      },
+      "GitHubOAuthToken": {
+        "Description": "Create a token with 'repo' and 'admin:repo_hook' permissions here https://github.com/settings/tokens",
+        "Type": "String",
+        "MinLength": 20,
+        "Default": "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"
+      },
+      "CloudFormationStackName": {
+        "Type": "String",
+        "Description": "The name of the CloudFormation stack to deploy",
+        "AllowedPattern": "[A-Za-z0-9-]+",
+        "MinLength": 2
+      },
+      "DevDeploymentTemplateParams": {
+        "Type": "String",
+        "Description": "The cloud formation template parameters for deploying to Dev Environment (in the actual project)",
+        "MinLength": 2,
+        "Default": "dev-params.json"
+      },
+      "StagingDeploymentTemplateParams": {
+        "Type": "String",
+        "Description": "The cloud formation template parameters for deploying to Staging Environment",
+        "MinLength": 2,
+        "Default": "staging-params.json"
+      },
+      "UATDeploymentTemplateParams": {
+        "Type": "String",
+        "Description": "The cloud formation template parameters for deploying to UAT Environment",
+        "MinLength": 2,
+        "Default": "uat-params.json"
+      },
+      "ProdDeploymentTemplateParams": {
+        "Type": "String",
+        "Description": "The cloud formation template parameters for deploying to Production Environment",
+        "MinLength": 2,
+        "Default": "production-params.json"
+      },
+      "PipelineMaintainerEmailAddress": {
+        "Description": "Email Address for sending pipeline related notifications",
+        "Type": "String",
+        "Default": "murshid@zoftsolutions.com"
+      }
+    },
+    "Mappings": {},
+    "Conditions": {},
+    "Resources": {
+      "CodeBuildRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "Path": "/",
+          "RoleName": {
+            "Fn::Sub": "${ApplicationName}-CodeBuild"
+          },
+          "AssumeRolePolicyDocument": {
+            "Statement": [
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "codebuild.amazonaws.com"
+                }
+              },
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "kms.amazonaws.com"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "CodePipelineRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "Path": "/",
+          "RoleName": {
+            "Fn::Sub": "${ApplicationName}-CodePipeline"
+          },
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": ["codepipeline.amazonaws.com"]
+                },
+                "Action": ["sts:AssumeRole"]
+              },
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "kms.amazonaws.com"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "CloudFormationRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "Path": "/",
+          "RoleName": {
+            "Fn::Sub": "${ApplicationName}-CloudFormation"
+          },
+          "AssumeRolePolicyDocument": {
+            "Statement": [
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "cloudformation.amazonaws.com"
+                }
+              },
+              {
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "kms.amazonaws.com"
+                }
+              }
+            ]
+          },
+          "Policies": [
+            {
+              "PolicyName": {
+                "Fn::Sub": "${ApplicationName}-CloudFormation"
+              },
+              "PolicyDocument": {
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": ["*"],
+                    "Resource": "*"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "TestPipelineArtifactS3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": {
+            "Fn::Join": [
+              "-",
+              [
+                "pipeline",
+                {
+                  "Ref": "ApplicationName"
+                }
+              ]
+            ]
+          }
+        }
+      },
+      "CodePipelineIAMPolicy": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+          "PolicyName": {
+            "Fn::Sub": "${ApplicationName}-CodePipeline"
+          },
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": [
+                  "cloudformation:CreateStack",
+                  "cloudformation:DeleteStack",
+                  "cloudformation:DescribeStacks",
+                  "cloudformation:UpdateStack",
+                  "cloudformation:CreateChangeSet",
+                  "cloudformation:DeleteChangeSet",
+                  "cloudformation:Describe*",
+                  "cloudformation:List*",
+                  "cloudformation:ExecuteChangeSet",
+                  "cloudformation:SetStackPolicy",
+                  "cloudformation:ValidateTemplate",
+                  "codepipeline:*",
+                  "iam:ListRoles",
+                  "iam:PassRole",
+                  "s3:GetBucketLocation",
+                  "s3:ListAllMyBuckets"
+                ],
+                "Resource": "*",
+                "Effect": "Allow"
+              },
+              {
+                "Effect": "Allow",
+                "Action": ["kms:*"],
+                "Resource": {
+                  "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                }
+              },
+              {
+                "Action": ["codebuild:BatchGetBuilds", "codebuild:StartBuild"],
+                "Resource": "*",
+                "Effect": "Allow"
+              }
+            ]
+          },
+          "Roles": [
+            {
+              "Ref": "CodePipelineRole"
+            }
+          ]
+        },
+        "DependsOn": ["CodePipelineRole"]
+      },
+      "CodeBuildIAMPolicy": {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+          "PolicyName": {
+            "Fn::Sub": "${ApplicationName}-CodeBuild"
+          },
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Resource": ["*"],
+                "Action": [
+                  "logs:CreateLogGroup",
+                  "logs:CreateLogStream",
+                  "logs:PutLogEvents"
+                ]
+              },
+              {
+                "Effect": "Allow",
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "TestPipelineArtifactS3Bucket"
+                        },
+                        "/*"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "TestPipelineArtifactS3Bucket"
+                        }
+                      ]
+                    ]
+                  }
+                ],
+                "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject"]
+              },
+              {
+                "Effect": "Allow",
+                "Resource": [
+                  {
+                    "Fn::Sub": "arn:aws:s3:::dev-${ApplicationName}/*"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::staging-${ApplicationName}/*"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::uat-${ApplicationName}/*"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::production-${ApplicationName}/*"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::dev-${ApplicationName}"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::staging-${ApplicationName}"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::uat-${ApplicationName}"
+                  },
+                  {
+                    "Fn::Sub": "arn:aws:s3:::production-${ApplicationName}"
+                  }
+                ],
+                "Action": ["s3:*"]
+              }
+            ]
+          },
+          "Roles": [
+            {
+              "Ref": "CodeBuildRole"
+            }
+          ]
+        },
+        "DependsOn": ["CodeBuildRole"]
+      },
+      "CrossAccountKMSKey": {
+        "Type": "AWS::KMS::Key",
+        "Properties": {
+          "Description": "Used by Assumed Roles in Dev/Prod accounts to Encrypt/Decrypt code",
+          "EnableKeyRotation": true,
+          "KeyPolicy": {
+            "Version": "2012-10-17",
+            "Id": {
+              "Ref": "AWS::StackName"
+            },
+            "Statement": [
+              {
+                "Sid": "Enable IAM policies",
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": "arn:aws:iam::024023272279:root"
+                },
+                "Action": "kms:*",
+                "Resource": "*"
+              },
+              {
+                "Sid": "Allow use of the key for Pipeline deployments",
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": [
+                    {
+                      "Fn::GetAtt": ["CodePipelineRole", "Arn"]
+                    },
+                    {
+                      "Fn::GetAtt": ["CodeBuildRole", "Arn"]
+                    },
+                    {
+                      "Fn::GetAtt": ["CloudFormationRole", "Arn"]
+                    }
+                  ]
+                },
+                "Action": [
+                  "kms:Encrypt",
+                  "kms:Decrypt",
+                  "kms:ReEncrypt*",
+                  "kms:GenerateDataKey*",
+                  "kms:DescribeKey"
+                ],
+                "Resource": "*"
+              }
+            ]
+          }
+        },
+        "DependsOn": ["CodePipelineRole", "CodeBuildRole", "CloudFormationRole"]
+      },
+      "CrossAccountKMSAlias": {
+        "Type": "AWS::KMS::Alias",
+        "Properties": {
+          "AliasName": {
+            "Fn::Sub": "alias/test-codepipeline-crossaccounts"
+          },
+          "TargetKeyId": {
+            "Ref": "CrossAccountKMSKey"
+          }
+        },
+        "DependsOn": ["CrossAccountKMSKey"]
+      },
+      "DevCodeBuild": {
+        "Type": "AWS::CodeBuild::Project",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "Dev-${ApplicationName}"
+          },
+          "Description": {
+            "Fn::Sub": "Dev Build project for ${ApplicationName} "
+          },
+          "Artifacts": {
+            "Name": {
+              "Ref": "ApplicationName"
+            },
+            "Type": "CODEPIPELINE"
+          },
+          "ServiceRole": {
+            "Ref": "CodeBuildRole"
+          },
+          "EncryptionKey": {
+            "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+          },
+          "Source": {
+            "Type": "CODEPIPELINE",
+            "BuildSpec": {
+              "Fn::Sub": "buildspec.yml"
+            }
+          },
+          "Environment": {
+            "ComputeType": "BUILD_GENERAL1_MEDIUM",
+            "PrivilegedMode": true,
+            "Image": "aws/codebuild/nodejs:10.14.1",
+            "Type": "LINUX_CONTAINER",
+            "EnvironmentVariables": [
+              {
+                "Name": "ARTIFACT_S3_BUCKET",
+                "Value": {
+                  "Fn::Sub": "dev-${ApplicationName}"
+                }
+              },
+              {
+                "Name": "ENV",
+                "Value": "dev"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_ACCESS_KEY",
+                "Value": "AKIAQLF7GBNLWWMVZ6MQ"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_SECRET_KEY",
+                "Value": "trDaajH8DxYUYxdQl7kyzY6xeMyAmZjYQowOJ5Jj"
+              }
+            ]
+          }
+        },
+        "DependsOn": ["CrossAccountKMSKey"]
+      },
+      "StagingCodeBuild": {
+        "Type": "AWS::CodeBuild::Project",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "Staging-${ApplicationName}"
+          },
+          "Description": {
+            "Fn::Sub": "Staging Build project for ${ApplicationName} "
+          },
+          "Artifacts": {
+            "Name": {
+              "Ref": "ApplicationName"
+            },
+            "Type": "CODEPIPELINE"
+          },
+          "ServiceRole": {
+            "Ref": "CodeBuildRole"
+          },
+          "EncryptionKey": {
+            "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+          },
+          "Source": {
+            "Type": "CODEPIPELINE",
+            "BuildSpec": {
+              "Fn::Sub": "buildspec.yml"
+            }
+          },
+          "Environment": {
+            "ComputeType": "BUILD_GENERAL1_MEDIUM",
+            "PrivilegedMode": true,
+            "Image": "aws/codebuild/nodejs:10.14.1",
+            "Type": "LINUX_CONTAINER",
+            "EnvironmentVariables": [
+              {
+                "Name": "ARTIFACT_S3_BUCKET",
+                "Value": {
+                  "Fn::Sub": "staging-${ApplicationName}"
+                }
+              },
+              {
+                "Name": "ENV",
+                "Value": "staging"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_ACCESS_KEY",
+                "Value": "AKIAQLF7GBNLWWMVZ6MQ"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_SECRET_KEY",
+                "Value": "trDaajH8DxYUYxdQl7kyzY6xeMyAmZjYQowOJ5Jj"
+              }
+            ]
+          }
+        },
+        "DependsOn": ["CrossAccountKMSKey"]
+      },
+      "UatCodeBuild": {
+        "Type": "AWS::CodeBuild::Project",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "Uat-${ApplicationName}"
+          },
+          "Description": {
+            "Fn::Sub": "Uat Build project for ${ApplicationName} "
+          },
+          "Artifacts": {
+            "Name": {
+              "Ref": "ApplicationName"
+            },
+            "Type": "CODEPIPELINE"
+          },
+          "ServiceRole": {
+            "Ref": "CodeBuildRole"
+          },
+          "EncryptionKey": {
+            "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+          },
+          "Source": {
+            "Type": "CODEPIPELINE",
+            "BuildSpec": {
+              "Fn::Sub": "buildspec.yml"
+            }
+          },
+          "Environment": {
+            "ComputeType": "BUILD_GENERAL1_MEDIUM",
+            "PrivilegedMode": true,
+            "Image": "aws/codebuild/nodejs:10.14.1",
+            "Type": "LINUX_CONTAINER",
+            "EnvironmentVariables": [
+              {
+                "Name": "ARTIFACT_S3_BUCKET",
+                "Value": {
+                  "Fn::Sub": "uat-${ApplicationName}"
+                }
+              },
+              {
+                "Name": "ENV",
+                "Value": "uat"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_ACCESS_KEY",
+                "Value": "AKIAQLF7GBNLWWMVZ6MQ"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_SECRET_KEY",
+                "Value": "trDaajH8DxYUYxdQl7kyzY6xeMyAmZjYQowOJ5Jj"
+              }
+            ]
+          }
+        },
+        "DependsOn": ["CrossAccountKMSKey"]
+      },
+      "ProductionCodeBuild": {
+        "Type": "AWS::CodeBuild::Project",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "Production-${ApplicationName}"
+          },
+          "Description": {
+            "Fn::Sub": "Production Build project for ${ApplicationName} "
+          },
+          "Artifacts": {
+            "Name": {
+              "Ref": "ApplicationName"
+            },
+            "Type": "CODEPIPELINE"
+          },
+          "ServiceRole": {
+            "Ref": "CodeBuildRole"
+          },
+          "EncryptionKey": {
+            "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+          },
+          "Source": {
+            "Type": "CODEPIPELINE",
+            "BuildSpec": {
+              "Fn::Sub": "buildspec.yml"
+            }
+          },
+          "Environment": {
+            "ComputeType": "BUILD_GENERAL1_MEDIUM",
+            "PrivilegedMode": true,
+            "Image": "aws/codebuild/nodejs:10.14.1",
+            "Type": "LINUX_CONTAINER",
+            "EnvironmentVariables": [
+              {
+                "Name": "ARTIFACT_S3_BUCKET",
+                "Value": {
+                  "Fn::Sub": "production-${ApplicationName}"
+                }
+              },
+              {
+                "Name": "ENV",
+                "Value": "production"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_ACCESS_KEY",
+                "Value": "AKIAQLF7GBNLWWMVZ6MQ"
+              },
+              {
+                "Name": "PROD_AWS_ACCOUNT_SECRET_KEY",
+                "Value": "trDaajH8DxYUYxdQl7kyzY6xeMyAmZjYQowOJ5Jj"
+              }
+            ]
+          }
+        },
+        "DependsOn": ["CrossAccountKMSKey"]
+      },
+      "CodePipeline": {
+        "Type": "AWS::CodePipeline::Pipeline",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "${ApplicationName}"
+          },
+          "RoleArn": {
+            "Fn::GetAtt": ["CodePipelineRole", "Arn"]
+          },
+          "RestartExecutionOnUpdate": true,
+          "ArtifactStore": {
+            "Type": "S3",
+            "Location": {
+              "Ref": "TestPipelineArtifactS3Bucket"
+            },
+            "EncryptionKey": {
+              "Id": {
+                "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+              },
+              "Type": "KMS"
+            }
+          },
+          "Stages": [
+            {
+              "Name": "Source",
+              "Actions": [
+                {
+                  "Name": {
+                    "Fn::Sub": "${GitHubRepository}-GitHub"
+                  },
+                  "ActionTypeId": {
+                    "Category": "Source",
+                    "Owner": "ThirdParty",
+                    "Version": 1,
+                    "Provider": "GitHub"
+                  },
+                  "OutputArtifacts": [
+                    {
+                      "Name": "Source"
+                    }
+                  ],
+                  "Configuration": {
+                    "Owner": {
+                      "Ref": "GitHubRepositoryOwner"
+                    },
+                    "Repo": {
+                      "Ref": "GitHubRepository"
+                    },
+                    "Branch": "master",
+                    "OAuthToken": {
+                      "Ref": "GitHubOAuthToken"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "DevBuild",
+              "Actions": [
+                {
+                  "Name": "CodeBuild",
+                  "InputArtifacts": [
+                    {
+                      "Name": "Source"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Build",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CodeBuild"
+                  },
+                  "OutputArtifacts": [
+                    {
+                      "Name": "DevBuilt"
+                    }
+                  ],
+                  "Configuration": {
+                    "ProjectName": {
+                      "Ref": "DevCodeBuild"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "DevDeploy",
+              "Actions": [
+                {
+                  "Name": "DeployInfrastructure",
+                  "RunOrder": 1,
+                  "InputArtifacts": [
+                    {
+                      "Name": "DevBuilt"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Deploy",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CloudFormation"
+                  },
+                  "Configuration": {
+                    "ActionMode": "REPLACE_ON_FAILURE",
+                    "RoleArn": {
+                      "Fn::GetAtt": ["CloudFormationRole", "Arn"]
+                    },
+                    "Capabilities": "CAPABILITY_NAMED_IAM",
+                    "StackName": {
+                      "Fn::Sub": "dev-${CloudFormationStackName}"
+                    },
+                    "TemplatePath": "DevBuilt::.aws/cloudformation/application.template",
+                    "TemplateConfiguration": {
+                      "Fn::Sub": "DevBuilt::.aws/cloudformation/config/${DevDeploymentTemplateParams}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "StagingApproval",
+              "Actions": [
+                {
+                  "Name": "StagingGate",
+                  "ActionTypeId": {
+                    "Category": "Approval",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "Manual"
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "StagingBuild",
+              "Actions": [
+                {
+                  "Name": "CodeBuild",
+                  "InputArtifacts": [
+                    {
+                      "Name": "Source"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Build",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CodeBuild"
+                  },
+                  "OutputArtifacts": [
+                    {
+                      "Name": "StagingBuilt"
+                    }
+                  ],
+                  "Configuration": {
+                    "ProjectName": {
+                      "Ref": "StagingCodeBuild"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "StagingDeploy",
+              "Actions": [
+                {
+                  "Name": "DeployInfrastructure",
+                  "RunOrder": 1,
+                  "InputArtifacts": [
+                    {
+                      "Name": "StagingBuilt"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Deploy",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CloudFormation"
+                  },
+                  "Configuration": {
+                    "ActionMode": "REPLACE_ON_FAILURE",
+                    "RoleArn": {
+                      "Fn::GetAtt": ["CloudFormationRole", "Arn"]
+                    },
+                    "Capabilities": "CAPABILITY_NAMED_IAM",
+                    "StackName": {
+                      "Fn::Sub": "staging-${CloudFormationStackName}"
+                    },
+                    "TemplatePath": "StagingBuilt::.aws/cloudformation/application.template",
+                    "TemplateConfiguration": {
+                      "Fn::Sub": "StagingBuilt::.aws/cloudformation/config/${StagingDeploymentTemplateParams}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "ProductionApproval",
+              "Actions": [
+                {
+                  "Name": "ProductionGate",
+                  "ActionTypeId": {
+                    "Category": "Approval",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "Manual"
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "ProductionBuild",
+              "Actions": [
+                {
+                  "Name": "CodeBuild",
+                  "InputArtifacts": [
+                    {
+                      "Name": "Source"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Build",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CodeBuild"
+                  },
+                  "OutputArtifacts": [
+                    {
+                      "Name": "ProductionBuilt"
+                    }
+                  ],
+                  "Configuration": {
+                    "ProjectName": {
+                      "Ref": "ProductionCodeBuild"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "Name": "ProductionDeploy",
+              "Actions": [
+                {
+                  "Name": "DeployInfrastructure",
+                  "RunOrder": 1,
+                  "InputArtifacts": [
+                    {
+                      "Name": "ProductionBuilt"
+                    }
+                  ],
+                  "ActionTypeId": {
+                    "Category": "Deploy",
+                    "Owner": "AWS",
+                    "Version": 1,
+                    "Provider": "CloudFormation"
+                  },
+                  "Configuration": {
+                    "ActionMode": "REPLACE_ON_FAILURE",
+                    "Capabilities": "CAPABILITY_NAMED_IAM",
+                    "StackName": {
+                      "Fn::Sub": "production-${CloudFormationStackName}"
+                    },
+                    "TemplatePath": "ProductionBuilt::.aws/cloudformation/application.template",
+                    "TemplateConfiguration": {
+                      "Fn::Sub": "ProductionBuilt::.aws/cloudformation/config/${ProdDeploymentTemplateParams}"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "CodePipelineSNSTopic": {
+        "Type": "AWS::SNS::Topic",
+        "Properties": {
+          "Subscription": [
+            {
+              "Endpoint": {
+                "Ref": "PipelineMaintainerEmailAddress"
+              },
+              "Protocol": "email"
+            }
+          ]
+        }
+      },
+      "CodePipelineSNSTopicPolicy": {
+        "Type": "AWS::SNS::TopicPolicy",
+        "Properties": {
+          "PolicyDocument": {
+            "Id": {
+              "Fn::Sub": "${ApplicationName}-PipelineNotificationTopicPolicy"
+            },
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": ["events.amazonaws.com"]
+                },
+                "Action": "sns:Publish",
+                "Resource": {
+                  "Ref": "CodePipelineSNSTopic"
+                }
+              }
+            ]
+          },
+          "Topics": [
+            {
+              "Ref": "CodePipelineSNSTopic"
+            }
+          ]
+        }
+      },
+      "CodePipelineEventRule": {
+        "Type": "AWS::Events::Rule",
+        "Properties": {
+          "Description": {
+            "Fn::Sub": "${ApplicationName} pipeline events rule"
+          },
+          "EventPattern": {
+            "source": ["aws.codepipeline"],
+            "detail-type": ["CodePipeline Pipeline Execution State Change"],
+            "detail": {
+              "state": ["FAILED"],
+              "pipeline": [
+                {
+                  "Ref": "CodePipeline"
+                }
+              ]
+            }
+          },
+          "State": "ENABLED",
+          "Targets": [
+            {
+              "Arn": {
+                "Ref": "CodePipelineSNSTopic"
+              },
+              "Id": {
+                "Fn::Sub": "${ApplicationName}-PipelineNotificationTopic"
+              },
+              "InputTransformer": {
+                "InputTemplate": {
+                  "Fn::Sub": "\"The Pipeline <pipeline> has <state> at <at>. Go to https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/<pipeline> to see details\" "
+                },
+                "InputPathsMap": {
+                  "pipeline": "$.detail.pipeline",
+                  "state": "$.detail.state",
+                  "at": "$.time"
+                }
+              }
+            }
+          ]
+        }
+      },
+  
+      "PipelineArtifactS3BucketPolicy": {
+        "Type": "AWS::S3::BucketPolicy",
+        "Properties": {
+          "Bucket": {
+            "Ref": "TestPipelineArtifactS3Bucket"
+          },
+          "PolicyDocument": {
+            "Statement": [
+              {
+                "Action": ["s3:*"],
+                "Effect": "Allow",
+                "Resource": [
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "TestPipelineArtifactS3Bucket"
+                        },
+                        "/*"
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:::",
+                        {
+                          "Ref": "TestPipelineArtifactS3Bucket"
+                        }
+                      ]
+                    ]
+                  }
+                ],
+                "Principal": {
+                  "AWS": [
+                    {
+                      "Fn::GetAtt": ["CodePipelineRole", "Arn"]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "DependsOn": [
+          "TestPipelineArtifactS3Bucket",
+          "CodePipelineRole",
+          "CloudFormationRole"
+        ]
+      }
+    },
+    "Outputs": {
+      "CodePipelineURL": {
+        "Description": "The URL for the created pipeline",
+        "Value": {
+          "Fn::Sub": "https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${ApplicationName}"
+        }
+      },
+      "CrossAccountKMSKey": {
+        "Value": {
+          "Fn::GetAtt": ["CrossAccountKMSKey", "Arn"]
+        },
+        "Export": {
+          "Name": {
+            "Fn::Sub": "${ApplicationName}-CrossAccountKMSKey"
+          }
+        }
+      }
+    }
+  }
+  

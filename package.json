@@ -1,0 +1,19 @@
+{
+  "name": "test-cicd",
+  "version": "1.0.0",
+  "description": "test a ci/cd pipeline using aws codepipeline codebuild cloudformation",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start" : "sls offline start"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "serverless-http": "^2.7.0"
+  },
+  "devDependencies": {
+    "serverless-offline": "^8.2.0"
+  }
+}
