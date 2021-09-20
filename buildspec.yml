@@ -6,8 +6,8 @@ env:
 
 phases:
   install:
-      runtime-versions:
-        nodejs: 12
+    runtime-versions:
+      nodejs: 12
     commands:
       - echo Installing dependencies...
       - npm i -g serverless
