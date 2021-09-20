@@ -26,18 +26,18 @@ phases:
       # - npm run-script lint
       # - npm run test
       - mkdir -p target/${ENV}
-      - serverless package --package target/${ENV} --stage ${ENV} -v -r ca-central-1
+      - serverless package --package target/${ENV} --stage ${ENV} --region ca-central-1
   post_build:
     commands:
       - echo Copying artifacts to S3 at `date`
       - |
         if [ ${ENV} = "uat" ] || [ ${ENV} = "production" ]; then
           echo Copying artifacts with profile aws-prod
-          aws s3 api create-bucket --bucket ${ARTIFACT_S3_BUCKET} --region ca-central-1
+          aws s3 mb s3://${ARTIFACT_S3_BUCKET}
           aws s3 sync target/${ENV} "s3://${ARTIFACT_S3_BUCKET}" --cache-control "max-age=1"  --profile aws-prod
         else
           echo Copying artifacts with profile default
-          aws s3 api create-bucket --bucket ${ARTIFACT_S3_BUCKET} --region ca-central-1
+          aws s3 mb s3://${ARTIFACT_S3_BUCKET}
           aws s3 sync target/${ENV} "s3://${ARTIFACT_S3_BUCKET}" --cache-control "max-age=1" 
         fi
       - echo Copied artifacts to S3 at `date`
