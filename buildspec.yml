@@ -28,7 +28,7 @@ phases:
       # - npm run-script lint
       # - npm run test
       - mkdir -p target/${ENV}
-      - sls deploy -s ${ENV} -r ca-central-1
+      - sls -p target/${ENV} -s ${ENV} -r ca-central-1
   post_build:
     commands:
       - echo Copying artifacts to S3 at `date`
