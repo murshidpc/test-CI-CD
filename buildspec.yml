@@ -26,7 +26,7 @@ phases:
       # - npm run-script lint
       # - npm run test
       - mkdir -p target/${ENV}
-      - serverless package --package target/${ENV} --stage ${ENV} --region ca-central-1
+      - serverless package --package target/${ENV} --stage ${ENV}
   post_build:
     commands:
       - echo Copying artifacts to S3 at `date`
