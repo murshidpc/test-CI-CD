@@ -8,6 +8,7 @@ phases:
   install:
     runtime-versions:
       nodejs: 12
+      npm : 6
     commands:
       - echo Installing dependencies...
       - npm install -g npm
@@ -29,7 +30,7 @@ phases:
       # - npm run-script lint
       # - npm run test
       - mkdir -p target/${ENV}
-      - sls -p target/${ENV} -s ${ENV} -r ca-central-1
+      - serverless package -p target/${ENV} -s ${ENV} -r ca-central-1
   post_build:
     commands:
       - echo Copying artifacts to S3 at `date`
