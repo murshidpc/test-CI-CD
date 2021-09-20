@@ -50,7 +50,6 @@ cache:
     - "node_modules/**/*"
 
 artifacts:
-  type: zip
   files:
     - .aws/**/*
     - build-config/*
