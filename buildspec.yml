@@ -22,10 +22,10 @@ phases:
     commands:
       - echo Building for ${ENV}...
       # - npm run start
-      - aws configure set aws_access_key_id ${PROD_AWS_ACCOUNT_ACCESS_KEY} 
-      - aws configure set aws_secret_access_key ${PROD_AWS_ACCOUNT_SECRET_KEY} 
-      - aws configure set default.region ca-central-1 
-      - aws configure set default.output json 
+      - aws configure set aws_access_key_id ${PROD_AWS_ACCOUNT_ACCESS_KEY} --profile aws-prod
+      - aws configure set aws_secret_access_key ${PROD_AWS_ACCOUNT_SECRET_KEY} --profile aws-prod
+      - aws configure set default.region ca-central-1 --profile aws-prod
+      - aws configure set default.output json --profile aws-prod
       # - npm run-script lint
       # - npm run test
       - mkdir -p target/${ENV}
