@@ -22,7 +22,7 @@
         "Description": "Create a token with 'repo' and 'admin:repo_hook' permissions here https://github.com/settings/tokens",
         "Type": "String",
         "MinLength": 20,
-        "Default": "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"
+        "Default": "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"
       },
       "CloudFormationStackName": {
         "Type": "String",
